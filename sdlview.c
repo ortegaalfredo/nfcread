@@ -92,6 +92,16 @@ void DrawScreen(SDL_Surface* screen, int bufsize)
 // Clean
 SDL_FillRect( SDL_GetVideoSurface(), NULL, 0 );
 
+// Trigger
+/*
+buf[0]=0;
+while (1) {
+	int len=fread(buf,1,2*sizeof(short),stdin);
+	if (len!=2*sizeof(short)) exit(0); // EOF
+	if (buf[0]>0x100)
+		break;
+	}
+*/
 // Read data
 int len=fread(buf,1,bufsize*sizeof(short),stdin);
 if (len!=bufsize*sizeof(short))

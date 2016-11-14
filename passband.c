@@ -15,8 +15,6 @@
 #define WIDTH 512
 #define DEPTH 32
 
-
-
      
 short *allocbuf(int buflen)
 	{
@@ -44,11 +42,19 @@ SDL_Flip(screen);
 };
 
 
+void detect(short *buf) {
+
+}
+
+double hamming (int i, int nn)
+{
+  return ( 0.54 - 0.46 * cos (2.0*M_PI*(double)i/(double)(nn-1)) );
+}
+
 int main( int argc, char** argv )
 {
 
-int SIZE = 32768;
-int buflen=SIZE; // five cycles
+int buflen=2048;
 
 short *buf=allocbuf(buflen);
 
@@ -72,77 +78,95 @@ short *buf=allocbuf(buflen);
 
 
 
-        fftw_complex    *fft_result, *ifft_result;
+        fftw_complex    *fft_result;
         fftw_plan       plan_forward;
 	double *data;
-        int             i;
+        int             i,q;
        
+// Largo del ciclo a leer en samples
+int CYCLELEN = 530;
+// Ciclos a promediar
+int AverageCycles=3;
+// FFT Size
+#define SIZE CYCLELEN
+ 
 data        = ( double *) malloc ( sizeof( double ) * SIZE );
 fft_result  = ( fftw_complex* ) fftw_malloc( sizeof( fftw_complex ) * SIZE );
-ifft_result = ( fftw_complex* ) fftw_malloc( sizeof( fftw_complex ) * SIZE );
 plan_forward = fftw_plan_dft_r2c_1d(SIZE, data, fft_result,FFTW_ESTIMATE);
 int len;
 while((len=fread(buf,1,buflen*sizeof(short),stdin))==buflen*sizeof(short))
 	{
-        /* populate input data */
-   	for(i=0;i<buflen;i++) {
-			data[i] = buf[i];
-			}
-	/* hann window */
-	for (i = 0; i < SIZE; i++) {
-	    double multiplier = 0.5 * (1 - cos(2*PI*i/(SIZE-1)));
-	//    data[i] = multiplier * data[i];
-	}
+	
+	int window_pointer;
+	for(window_pointer=0;window_pointer<(buflen-CYCLELEN*AverageCycles);window_pointer+=200)
+		{
+        	/* populate input data */
+	   	for(i=0;i<CYCLELEN;i++) {
+				data[i]=0;
+				for(q=0;q<AverageCycles;q++) 
+					data[i] += buf[window_pointer+i+(q*CYCLELEN)];
+				data[i]/=AverageCycles;
+				short outdata=data[i];
+				//fwrite(&outdata,sizeof(short),1,stdout);
+				}
 
-        /* print initial data */
-     //   for( i = 0 ; i < SIZE ; i++ ) 
-     //       fprintf( stdout, "data[%d] = { %2.2f }\n", i, data[i]);
-        
+		/* hamming window */
+	//	for (i = 0; i < SIZE; i++) 
+	//	    data[i] = hamming(i,SIZE) * data[i];
+	
+		/* do fft */
+        	fftw_execute( plan_forward );
        
-        fftw_execute( plan_forward );
-       
-	/* normalize */
-	float max=-999999;
-        for( i = 0 ; i < SIZE ; i++ )  {
-           float a=fft_result[i][0];
-	   float b=fft_result[i][1];
-	   float power=(a*a+b*b);
-           if (max<power) max=power;
-	}
-	//max=1;
-        /* print fft result */
-        for( i = 0 ; i < 40 ; i++ )  {
-           float a=fft_result[i][0];
-	   float b=fft_result[i][1];
-	   float power=(a*a+b*b);
-	   float freq=  (i * (SAMPLING_RATE/2))/(SIZE/2);
-           //fprintf( stdout, "fft_result[%d] = { %2.5f } freq: %2.5f\n",i, power/max,freq);
-	}
-
-	/* bin carrier, and vote freqs */
-
-	float carrier_power=calc_power(fft_result,19,22,max);
-	float vote_A_power=calc_power(fft_result,30,37,max);
-	float vote_A1_power=calc_power(fft_result,23,29,max);
-	float vote_B_power=calc_power(fft_result,67,72,max);
-	float vote_B1_power=calc_power(fft_result,61,66,max);
- //       fprintf( stdout, "carrier_power= %2.5f \t vota_A_power = %2.5f \t vote_B_power = %2.5f\n",carrier_power,vote_A_power,vote_B_power);
-   //     fprintf( stdout, "carrier_power= %2.5f \t vota_A1_power = %2.5f \t vote_B1_power = %2.5f\n",carrier_power,vote_A1_power,vote_B1_power);
-	if (carrier_power>0.90) {
-		DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 255, 0, 0));
-		fprintf(stdout, "carrier detected\n");
-		/*
-		if (vote_B_power>vote_B1_power)
-			fprintf(stdout, "VOTE B detected (33)\n");
-		else
-		if (vote_A_power>vote_A1_power)
-			fprintf(stdout, "VOTE A detected (3F)\n");
-		else
-			fprintf(stdout, "unknown vote\n");
-		*/
+		/* normalize */
+		float max=-999999;
+	        for( i = 0 ; i < SIZE ; i++ )  {
+        	   float a=fft_result[i][0];
+		   float b=fft_result[i][1];
+		   float power=(a*a+b*b);
+	           if (max<power) max=power;
 		}
-	else  DrawScreen(screen,WIDTH,0);
+		max=10000000000;
+        
+		/* print fft result */
+        	for( i = 1 ; i < 2 ; i++ )  {
+	           float a=fft_result[i][0];
+		   float b=fft_result[i][1];
+		   float power=(a*a+b*b);
+		   float freq=  (i * (SAMPLING_RATE/2))/(SIZE/2);
+		   //if (power/max>100)
+	          // 	fprintf( stdout, "fft_result[%d] = { %2.5f } freq: %2.5f\n",i, power/max,freq);
+	           	//fprintf( stdout, "%2.5f \n",power/max);
+	}
 
+		/* bin carrier, and vote freqs */
+		float carrier_power=calc_power(fft_result,1,2,max);
+		float vote_A_power=calc_power(fft_result,34,42,max);
+		float vote_B_power=calc_power(fft_result,73,83,max);
+		float averagePower=0;
+        	for( i = 1 ; i < SIZE ; i++ )  {
+	           float a=fft_result[i][0];
+		   float b=fft_result[i][1];
+		   float power=(a*a+b*b);
+		   averagePower+=power/max;
+		}
+		averagePower/=SIZE;
+		if (averagePower>2) {// disconnected 
+			DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 120, 120, 120));
+			continue;
+			}
+		if ((carrier_power>150)) {
+	           	fprintf( stdout, "carrier: \t %2.5f A: \t%2.5f \tAverage %2.5f ", carrier_power,vote_A_power/vote_B_power,averagePower);
+			if ((vote_A_power/vote_B_power)<5) {
+				fprintf(stdout, "VOTE B detected (33) %f>%f\n",vote_A_power);
+				DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 255, 0, 0));
+				}
+			else	{
+				fprintf(stdout, "VOTE A detected (0F)\n");
+				DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 0, 255, 0));
+				}
+			}
+		else  DrawScreen(screen,WIDTH,0);
+		}
 	}
      
    /* free memory */
@@ -150,7 +174,6 @@ fftw_destroy_plan( plan_forward );
     
 fftw_free( data );
 fftw_free( fft_result );
-fftw_free( ifft_result );
        
 // unlock screen
     if(SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);  
