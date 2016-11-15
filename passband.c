@@ -89,7 +89,10 @@ int CYCLELEN = 530;
 int AverageCycles=3;
 // FFT Size
 #define SIZE CYCLELEN
- 
+
+// Vote ratio threshold
+#define VOTE_THRESHOLD 3
+
 data        = ( double *) malloc ( sizeof( double ) * SIZE );
 fft_result  = ( fftw_complex* ) fftw_malloc( sizeof( fftw_complex ) * SIZE );
 plan_forward = fftw_plan_dft_r2c_1d(SIZE, data, fft_result,FFTW_ESTIMATE);
@@ -156,7 +159,7 @@ while((len=fread(buf,1,buflen*sizeof(short),stdin))==buflen*sizeof(short))
 			}
 		if ((carrier_power>150)) {
 	           	fprintf( stdout, "carrier: \t %2.5f A: \t%2.5f \tAverage %2.5f ", carrier_power,vote_A_power/vote_B_power,averagePower);
-			if ((vote_A_power/vote_B_power)<5) {
+			if ((vote_A_power/vote_B_power)<VOTE_THRESHOLD) {
 				fprintf(stdout, "VOTE B detected (33) %f>%f\n",vote_A_power);
 				DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 255, 0, 0));
 				}
