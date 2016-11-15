@@ -1,6 +1,7 @@
 /*
- * passband.c: compute FFT and IFFT from an array
+ * passband.c: compute FFT of incoming signal and differentiate vote via threshold
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fftw3.h>
@@ -142,9 +143,9 @@ int main( int argc, char** argv )
             }
 
             /* bin carrier, and vote freqs */
-            float carrier_power=calc_power(fft_result,1,2,max);
-            float vote_A_power=calc_power(fft_result,34,42,max);
-            float vote_B_power=calc_power(fft_result,73,83,max);
+            float carrier_power=calc_power(fft_result,1,2,max); // 80 Hz (carrier)
+            float vote_A_power=calc_power(fft_result,34,42,max); // 2800-3300 Hz (0x0F0F0F0F)
+            float vote_B_power=calc_power(fft_result,73,83,max); // 5800-6300 Hz (0x33333333)
             float averagePower=0;
             for( i = 1 ; i < SIZE ; i++ )  {
                 float a=fft_result[i][0];
