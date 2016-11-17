@@ -92,7 +92,17 @@ int main( int argc, char** argv )
 #define SIZE CYCLELEN
 
 // Vote ratio threshold
-#define VOTE_THRESHOLD 3
+    float VOTE_THRESHOLD = 3;
+
+// Threshold learning
+    int detectCount=0;
+    float learning=200;
+    float thresoldA=0;
+    float thresoldB=0;
+
+// grouping
+    int carrier_counter=0;
+    int B_counter=0,A_counter=0;
 
     data        = ( double *) malloc ( sizeof( double ) * SIZE );
     fft_result  = ( fftw_complex* ) fftw_malloc( sizeof( fftw_complex ) * SIZE );
@@ -115,8 +125,8 @@ int main( int argc, char** argv )
             }
 
             /* hamming window */
-            //	for (i = 0; i < SIZE; i++)
-            //	    data[i] = hamming(i,SIZE) * data[i];
+            // 	for (i = 0; i < CYCLELEN; i++)
+            //	    data[i] = hamming(i,CYCLELEN) * data[i];
 
             /* do fft */
             fftw_execute( plan_forward );
@@ -158,16 +168,38 @@ int main( int argc, char** argv )
                 DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 120, 120, 120));
                 continue;
             }
-            if ((carrier_power>150)) {
-                fprintf( stdout, "carrier: \t %2.5f A: \t%2.5f \tAverage %2.5f ", carrier_power,vote_A_power/vote_B_power,averagePower);
-                if ((vote_A_power/vote_B_power)<VOTE_THRESHOLD) {
-                    fprintf(stdout, "VOTE B detected (33) %f>%f\n",vote_A_power);
-                    DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 255, 0, 0));
+            if ((carrier_power>150)) { // carrier detected
+                detectCount++;
+                carrier_counter++;
+                if (detectCount<learning) {
+                    fprintf( stdout, "LEARNING GREEN %i\n",detectCount);
+                    thresoldA+=vote_A_power/vote_B_power;
                 }
-                else	{
-                    fprintf(stdout, "VOTE A detected (0F)\n");
-                    DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 0, 255, 0));
+                else if (detectCount<learning*1.5) {
+                    fprintf( stdout, "-------- %i\n",detectCount);
                 }
+                else if (detectCount<learning*2.5) {
+                    fprintf( stdout, "LEARNING RED %i\n",detectCount);
+                    thresoldB+=vote_A_power/vote_B_power;
+                }
+                else if (detectCount==learning*2.5) {
+                    VOTE_THRESHOLD=((thresoldA/learning)*0.6+(thresoldB/learning))/2;
+                    fprintf( stdout, "**************** %2.5f THRESHOLD: \t%2.5f (%2.5f) ", thresoldA/learning,thresoldB/learning);
+                }
+                fprintf( stdout, "Carrier: \t %2.5f THRESHOLD: \t%2.5f (%2.5f) ", carrier_power,vote_A_power/vote_B_power,VOTE_THRESHOLD);
+                if ((vote_A_power/vote_B_power)<VOTE_THRESHOLD)  B_counter++;
+                else  A_counter++;
+                if (carrier_counter==16) {
+                    if (A_counter>B_counter) {
+                        fprintf(stdout, "VOTE A detected\n");
+                        DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 0, 255, 0));
+                    }
+                    else	{
+                        fprintf(stdout, "VOTE B detected\n");
+                        DrawScreen(screen,WIDTH,SDL_MapRGB(screen->format, 255, 0, 0));
+                    }
+                    carrier_counter=A_counter=B_counter=0;
+                } else fprintf(stdout, "\n");
             }
             else  DrawScreen(screen,WIDTH,0);
         }
